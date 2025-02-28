@@ -1,5 +1,12 @@
 import streamlit as st
 import requests
+import os
+
+# Read the backend URL from the environment variable, with a default for local testing.
+BASE_API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+
+# Debug: show the backend URL on the app
+st.write("Using backend URL:", BASE_API_URL)
 
 # Custom CSS for UI enhancements using given HEX colors
 st.markdown(
@@ -28,15 +35,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Define the base URL of your FastAPI server
-BASE_API_URL = "http://127.0.0.1:8000"
-
 # Function to upload PDFs
 def upload_pdfs(files):
     upload_url = f"{BASE_API_URL}/upload_pdfs/"
     file_data = [("files", (file.name, file, "application/pdf")) for file in files]
     response = requests.post(upload_url, files=file_data)
-    return response.json()
+    st.write("Upload Response Code:", response.status_code)
+    st.write("Upload Response Text:", response.text)
+    try:
+        return response.json()
+    except Exception as e:
+        st.error(f"Error parsing JSON: {e}")
+        return {}
 
 # Function to process PDFs
 def process_pdfs(selected_pdfs, llm_choice):

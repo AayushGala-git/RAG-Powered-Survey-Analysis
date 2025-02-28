@@ -10,8 +10,18 @@ from Vectorstore import get_pdf_text, get_chunks, get_vectorstore
 from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Add CORS middleware to allow requests from any origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace "*" with specific origins if needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Directory to store uploaded PDFs
 PDF_DIR = "uploaded_pdfs"
@@ -40,7 +50,6 @@ def get_llm(llm_choice: str):
 def get_conversation_chain(vectorstore, llm_choice: str):
     llm = get_llm(llm_choice)
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer')
-    # Added return_source_documents=True to get source references
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
@@ -70,17 +79,11 @@ async def upload_pdfs(files: List[UploadFile] = File(...)):
 @app.post("/process_pdfs/")
 async def process_pdfs(llm_choice: str = Form(...), pdf_files: List[str] = Form(...)):
     all_selected_files = [os.path.join(PDF_DIR, pdf) for pdf in pdf_files]
-
     raw_text = get_pdf_text(all_selected_files)
     text_chunks = get_chunks(raw_text)
     vectorstore = get_vectorstore(text_chunks)
-
-    # Create conversation chain
     conversation_chain = get_conversation_chain(vectorstore, llm_choice)
-
-    # Save the chain to session or globally (e.g., database)
     app.state.conversation = conversation_chain
-
     return {"status": "PDFs processed successfully", "llm": llm_choice}
 
 # Ask a question endpoint
@@ -88,49 +91,39 @@ async def process_pdfs(llm_choice: str = Form(...), pdf_files: List[str] = Form(
 async def ask_question(question_input: QuestionInput):
     if app.state.conversation is None:
         return JSONResponse(status_code=400, content={"error": "No conversation chain found. Process PDFs first."})
-
     response = app.state.conversation({'question': question_input.question})
-    
-    # Build list of sources from the returned source documents
     source_docs = response.get("source_documents", [])
     sources = []
     for doc in source_docs:
         page = doc.metadata.get("page", "Unknown")
         file_name = doc.metadata.get("source", "Unknown")
-        snippet = doc.page_content[:200]  # first 200 characters as snippet
+        snippet = doc.page_content[:200]
         sources.append({
             "page": page,
             "file": file_name,
             "snippet": snippet
         })
-
     return {
         "answer": response["answer"],
         "chat_history": response["chat_history"],
         "sources": sources
     }
 
-# New endpoint: Compare Reports (Cross-Comparison of Two PDFs)
+# Compare Reports endpoint
 @app.post("/compare_reports/")
 async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Form(...)):
-    # Require exactly 2 PDFs for comparison
     if len(pdf_files) != 2:
         return JSONResponse(status_code=400, content={"error": "Please select exactly 2 PDFs for comparison."})
-    
     summaries = {}
-    llm = get_llm(llm_choice)  # Use the same LLM for summarization and comparison
+    llm = get_llm(llm_choice)
     for pdf in pdf_files:
         file_path = os.path.join(PDF_DIR, pdf)
         raw_text = get_pdf_text([file_path])
         text_chunks = get_chunks(raw_text)
-        # Concatenate the text from all chunks
         combined_text = " ".join([chunk.page_content for chunk in text_chunks])
-        # Create a summarization prompt for the individual report
         prompt = f"Summarize the following market research report in a concise paragraph:\n\n{combined_text}"
         summary = llm(prompt)
         summaries[pdf] = summary
-    
-    # Create a comparison prompt using the two summaries
     compare_prompt = (
         f"Compare the following two market research reports and highlight their similarities, differences, "
         f"and key insights:\n\nReport 1 Summary:\n{summaries[pdf_files[0]]}\n\nReport 2 Summary:\n{summaries[pdf_files[1]]}\n\nComparison:"
