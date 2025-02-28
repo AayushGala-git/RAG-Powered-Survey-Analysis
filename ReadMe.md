@@ -30,16 +30,73 @@ RAG-Power Survey Analysis is an application that leverages Retrieval-Augmented G
 - **Environment Management:** python-dotenv
 
 ## Project Structure
-├── api.py                  # FastAPI backend application
-├── client.py               # Streamlit frontend application
-├── Vectorstore.py          # PDF text extraction, chunking, and FAISS vectorstore creation
-├── Llama3.py               # HuggingFace endpoint for Llama 3.1 (API key managed via environment variable)
-├── Mixtral.py              # HuggingFace endpoint for Mixtral model (API key managed via environment variable)
-├── Phi.py                  # HuggingFace endpoint for Phi model (API key managed via environment variable)
-├── Dockerfile.backend      # Dockerfile for backend deployment
-├── Dockerfile.client       # Dockerfile for frontend deployment
-├── docker-compose.yml      # Docker Compose configuration for multi-container deployment
-├── requirements.txt        # Python dependencies for the backend
-├── requirements_client.txt # Python dependencies for the frontend
-├── .env                    # Environment variables file (not committed)
-└── README.md               # This file
+```plaintext
+├── api.py                  # FastAPI backend application  
+├── client.py               # Streamlit frontend application  
+├── Vectorstore.py          # PDF text extraction, chunking, and FAISS vectorstore creation  
+├── Llama3.py               # HuggingFace endpoint for Llama 3.1 (API key managed via environment variable)  
+├── Mixtral.py              # HuggingFace endpoint for Mixtral model (API key managed via environment variable)  
+├── Phi.py                  # HuggingFace endpoint for Phi model (API key managed via environment variable)  
+├── Dockerfile.backend      # Dockerfile for backend deployment  
+├── Dockerfile.client       # Dockerfile for frontend deployment  
+├── docker-compose.yml      # Docker Compose configuration for multi-container deployment  
+├── requirements.txt        # Python dependencies for the backend  
+├── requirements_client.txt # Python dependencies for the frontend  
+├── .env                    # Environment variables file (not committed)  
+└── README.md               # This file  
+```
+
+## Setup and Installation
+
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/AayushGala-git/RAG-Powered-Survey-Analysis.git
+   cd RAG-Powered-Survey-Analysis
+   ```
+2. **Install Dependencies:**  
+   	•	For the backend and frontend:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3.	**Environment Variables:**  
+    Create a .env file in the root directory and add your sensitive API keys and configurations. For example:
+  	```bash
+    HUGGINGFACEHUB_API_TOKEN=your_huggingface_api_token
+    BACKEND_URL=http://127.0.0.1:8000
+    ```
+4.	**Running Locally:** 
+	•	Backend:  
+  Start your FastAPI backend (from the project root):
+ ```bash
+ uvicorn backend.api:app --reload --host 0.0.0.0 --port 8000
+ ```
+  •	Frontend:  
+  Run your Streamlit app:  
+  ```bash
+  streamlit run frontend/client.py
+  ```
+
+## Usage
+
+- **PDF Upload & Processing:**  
+  Use the Streamlit UI to upload PDFs. The backend will extract text (using OCR if necessary), chunk the text, and create vector embeddings.
+
+- **Ask Questions:**  
+  Type a question in the provided input field. The backend uses AI models to generate answers and provide sources, which are displayed in the UI.
+
+- **Compare Reports:**  
+  Select two PDFs to compare, and the system will generate individual summaries and a combined comparison highlighting similarities and differences.
+
+  ## Troubleshooting
+
+- **Local Testing Issues:**
+  - Verify that your `.env` file is set up correctly.
+  - Ensure that your dependencies in `requirements.txt` and `requirements_client.txt` are up-to-date.
+  - Check for any error messages in the terminal when running the backend or frontend.
+
+- **API Errors:**
+  - If you encounter errors like 403 or 404, verify that your API endpoints in `backend/api.py` are correctly defined and that your Streamlit app is using the correct `BACKEND_URL`.
+
+- **File Storage:**
+  - Note that the `uploaded_pdfs` folder is used for temporary storage. In a production environment, consider using external storage (like AWS S3 or Google Cloud Storage) to persist files.
+ 
