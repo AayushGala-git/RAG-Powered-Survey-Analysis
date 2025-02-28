@@ -12,12 +12,13 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from fastapi.middleware.cors import CORSMiddleware
 
+# Create the FastAPI app. Vercel will look for this "app" object.
 app = FastAPI()
 
 # Add CORS middleware to allow requests from any origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace "*" with specific origins if needed
+    allow_origins=["*"],  # For production, you can limit origins to your domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,19 +26,20 @@ app.add_middleware(
 
 # Directory to store uploaded PDFs
 PDF_DIR = "uploaded_pdfs"
-
-# Ensure the directory exists
 if not os.path.exists(PDF_DIR):
     os.makedirs(PDF_DIR)
 
 # Custom prompt template
 custom_template = """Given the following conversation and a follow-up question, rephrase the follow-up question to be 
-a standalone question, in its original language. Chat History: {chat_history} Follow Up Input: {question} Standalone 
-question:"""
-
+a standalone question, in its original language. Chat History: {chat_history} Follow Up Input: {question} 
+Standalone question:"""
 Standalone_Question_Prompt = PromptTemplate.from_template(custom_template)
 
-# Function to get LLM based on the choice
+# Model for the question input
+class QuestionInput(BaseModel):
+    question: str
+    llm_choice: str
+
 def get_llm(llm_choice: str):
     if llm_choice == "Llama 3.1":
         return llama3
@@ -46,7 +48,6 @@ def get_llm(llm_choice: str):
     else:
         return phi
 
-# Function to create conversation chain
 def get_conversation_chain(vectorstore, llm_choice: str):
     llm = get_llm(llm_choice)
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer')
@@ -58,11 +59,6 @@ def get_conversation_chain(vectorstore, llm_choice: str):
         return_source_documents=True
     )
     return conversation_chain
-
-# Model for the question input
-class QuestionInput(BaseModel):
-    question: str
-    llm_choice: str
 
 # Upload PDF endpoint
 @app.post("/upload_pdfs/")
@@ -83,15 +79,20 @@ async def process_pdfs(llm_choice: str = Form(...), pdf_files: List[str] = Form(
     text_chunks = get_chunks(raw_text)
     vectorstore = get_vectorstore(text_chunks)
     conversation_chain = get_conversation_chain(vectorstore, llm_choice)
+
+    # WARNING: Serverless Functions on Vercel do not guarantee persistent state.
+    # Storing app.state.conversation here might not persist across invocations.
     app.state.conversation = conversation_chain
+
     return {"status": "PDFs processed successfully", "llm": llm_choice}
 
 # Ask a question endpoint
 @app.post("/ask_question/")
 async def ask_question(question_input: QuestionInput):
-    if app.state.conversation is None:
+    if not hasattr(app.state, "conversation") or app.state.conversation is None:
         return JSONResponse(status_code=400, content={"error": "No conversation chain found. Process PDFs first."})
-    response = app.state.conversation({'question': question_input.question})
+
+    response = app.state.conversation({"question": question_input.question})
     source_docs = response.get("source_documents", [])
     sources = []
     for doc in source_docs:
@@ -103,6 +104,7 @@ async def ask_question(question_input: QuestionInput):
             "file": file_name,
             "snippet": snippet
         })
+
     return {
         "answer": response["answer"],
         "chat_history": response["chat_history"],
@@ -114,6 +116,7 @@ async def ask_question(question_input: QuestionInput):
 async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Form(...)):
     if len(pdf_files) != 2:
         return JSONResponse(status_code=400, content={"error": "Please select exactly 2 PDFs for comparison."})
+
     summaries = {}
     llm = get_llm(llm_choice)
     for pdf in pdf_files:
@@ -124,9 +127,11 @@ async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Fo
         prompt = f"Summarize the following market research report in a concise paragraph:\n\n{combined_text}"
         summary = llm(prompt)
         summaries[pdf] = summary
+
     compare_prompt = (
         f"Compare the following two market research reports and highlight their similarities, differences, "
         f"and key insights:\n\nReport 1 Summary:\n{summaries[pdf_files[0]]}\n\nReport 2 Summary:\n{summaries[pdf_files[1]]}\n\nComparison:"
     )
     comparison = llm(compare_prompt)
+
     return {"comparison": comparison, "summaries": summaries}

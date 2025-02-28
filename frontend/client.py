@@ -6,7 +6,7 @@ import os
 BASE_API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 # Debug: show the backend URL on the app
-st.write("Using backend URL:", BASE_API_URL)
+# st.write("Using backend URL:", BASE_API_URL)
 
 # Custom CSS for UI enhancements using given HEX colors
 st.markdown(
@@ -40,8 +40,6 @@ def upload_pdfs(files):
     upload_url = f"{BASE_API_URL}/upload_pdfs/"
     file_data = [("files", (file.name, file, "application/pdf")) for file in files]
     response = requests.post(upload_url, files=file_data)
-    st.write("Upload Response Code:", response.status_code)
-    st.write("Upload Response Text:", response.text)
     try:
         return response.json()
     except Exception as e:
