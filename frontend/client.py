@@ -4,14 +4,18 @@ import os
 import time
 
 # Read the backend URL from the environment variable, with a default for local testing
-BASE_API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+BASE_API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").strip()
+# Remove any trailing parentheses that might have been mistakenly added
+if BASE_API_URL.endswith(')'):
+    BASE_API_URL = BASE_API_URL[:-1]
 
 # Add a health check function to verify backend is available
 def check_backend_health():
     try:
         response = requests.get(f"{BASE_API_URL}/health", timeout=10)
         return response.status_code == 200
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        st.error(f"Backend connection error: {str(e)}")
         return False
 
 # Add a retry mechanism for important requests
@@ -96,6 +100,9 @@ if 'uploaded_file_names' not in st.session_state:
 backend_available = check_backend_health()
 if not backend_available:
     st.warning(f"⚠️ Unable to connect to the backend at {BASE_API_URL}. Some features may not work.")
+    st.info("If you're experiencing connection issues, please ensure the backend service is running and properly configured.")
+else:
+    st.success(f"✅ Connected to backend at {BASE_API_URL}")
 
 # Streamlit UI
 st.markdown("<h1>RAG-Power Survey Analysis</h1>", unsafe_allow_html=True)
@@ -191,4 +198,4 @@ if st.button("Compare Reports"):
         st.error("Please select exactly 2 PDFs and an LLM to compare")
 
 # Display connection info in footer
-# st.markdown(f"<hr><small>Connected to backend at: {BASE_API_URL} | Backend status: {'✅ Connected' if backend_available else '❌ Disconnected'}</small>", unsafe_allow_html=True)
+st.markdown(f"<hr><small>Connected to backend at: {BASE_API_URL} | Backend status: {'✅ Connected' if backend_available else '❌ Disconnected'}</small>", unsafe_allow_html=True)
