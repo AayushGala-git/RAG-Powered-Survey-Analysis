@@ -72,7 +72,8 @@ async def upload_pdfs(files: List[UploadFile] = File(...)):
     for file in files:
         file_path = os.path.join(PDF_DIR, file.filename)
         with open(file_path, "wb") as f:
-            f.write(await file.read())
+            content = await file.read()
+            f.write(content)
         # Register the file in our in-memory registry
         uploaded_files_registry[file.filename] = file_path
         saved_files.append(file_path)
@@ -91,37 +92,43 @@ async def process_pdfs(llm_choice: str = Form(...), pdf_files: List[str] = Form(
                 content={"error": f"File not found: {os.path.basename(file_path)}. Please upload it again."}
             )
     
-    raw_text = get_pdf_text(all_selected_files)
-    text_chunks = get_chunks(raw_text)
-    vectorstore = get_vectorstore(text_chunks)
-    conversation_chain = get_conversation_chain(vectorstore, llm_choice)
-    app.state.conversation = conversation_chain
-    return {"status": "PDFs processed successfully", "llm": llm_choice}
+    try:
+        raw_text = get_pdf_text(all_selected_files)
+        text_chunks = get_chunks(raw_text)
+        vectorstore = get_vectorstore(text_chunks)
+        conversation_chain = get_conversation_chain(vectorstore, llm_choice)
+        app.state.conversation = conversation_chain
+        return {"status": "PDFs processed successfully", "llm": llm_choice}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error processing PDFs: {str(e)}"})
 
 @app.post("/ask_question/")
 async def ask_question(question_input: QuestionInput):
     if not hasattr(app.state, "conversation") or app.state.conversation is None:
         return JSONResponse(status_code=400, content={"error": "No conversation chain found. Process PDFs first."})
 
-    response = app.state.conversation({"question": question_input.question})
-    source_docs = response.get("source_documents", [])
-    sources = []
-    for doc in source_docs:
-        page = doc.metadata.get("page", "Unknown")
-        file_path = doc.metadata.get("source", "Unknown")
-        file_name = os.path.basename(file_path)
-        snippet = doc.page_content[:200]
-        sources.append({
-            "page": page,
-            "file": file_name,
-            "snippet": snippet
-        })
+    try:
+        response = app.state.conversation({"question": question_input.question})
+        source_docs = response.get("source_documents", [])
+        sources = []
+        for doc in source_docs:
+            page = doc.metadata.get("page", "Unknown")
+            file_path = doc.metadata.get("source", "Unknown")
+            file_name = os.path.basename(file_path)
+            snippet = doc.page_content[:200]
+            sources.append({
+                "page": page,
+                "file": file_name,
+                "snippet": snippet
+            })
 
-    return {
-        "answer": response["answer"],
-        "chat_history": response["chat_history"],
-        "sources": sources
-    }
+        return {
+            "answer": response["answer"],
+            "chat_history": response["chat_history"],
+            "sources": sources
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error processing question: {str(e)}"})
 
 @app.post("/compare_reports/")
 async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Form(...)):
@@ -139,24 +146,27 @@ async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Fo
                 content={"error": f"File not found: {os.path.basename(file_path)}. Please upload it again."}
             )
 
-    summaries = {}
-    llm = get_llm(llm_choice)
-    for i, pdf in enumerate(pdf_files):
-        file_path = file_paths[i]
-        raw_text = get_pdf_text([file_path])
-        text_chunks = get_chunks(raw_text)
-        combined_text = " ".join([chunk.page_content for chunk in text_chunks])
-        prompt = f"Summarize the following market research report in a concise paragraph:\n\n{combined_text}"
-        summary = llm(prompt)
-        summaries[pdf] = summary
+    try:
+        summaries = {}
+        llm = get_llm(llm_choice)
+        for i, pdf in enumerate(pdf_files):
+            file_path = file_paths[i]
+            raw_text = get_pdf_text([file_path])
+            text_chunks = get_chunks(raw_text)
+            combined_text = " ".join([chunk.page_content for chunk in text_chunks])
+            prompt = f"Summarize the following market research report in a concise paragraph:\n\n{combined_text}"
+            summary = llm(prompt)
+            summaries[pdf] = summary
 
-    compare_prompt = (
-        f"Compare the following two market research reports and highlight their similarities, differences, "
-        f"and key insights:\n\nReport 1 Summary:\n{summaries[pdf_files[0]]}\n\nReport 2 Summary:\n{summaries[pdf_files[1]]}\n\nComparison:"
-    )
-    comparison = llm(compare_prompt)
+        compare_prompt = (
+            f"Compare the following two market research reports and highlight their similarities, differences, "
+            f"and key insights:\n\nReport 1 Summary:\n{summaries[pdf_files[0]]}\n\nReport 2 Summary:\n{summaries[pdf_files[1]]}\n\nComparison:"
+        )
+        comparison = llm(compare_prompt)
 
-    return {"comparison": comparison, "summaries": summaries}
+        return {"comparison": comparison, "summaries": summaries}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error comparing reports: {str(e)}"})
 
 # Health check endpoint for Render
 @app.get("/health")

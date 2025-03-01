@@ -8,17 +8,14 @@ services:
     envVars:
       - key: HUGGINGFACEHUB_API_TOKEN
         sync: false
-      - key: PORT
-        value: 10000
+    healthCheckPath: /health
 
   # Frontend service
   - type: web
     name: rag-survey-analysis-frontend
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements_frontend.txt
     startCommand: streamlit run frontend/client.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: BACKEND_URL
         value: https://rag-survey-analysis-backend.onrender.com
-      - key: PORT
-        value: 10001
