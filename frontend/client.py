@@ -5,9 +5,6 @@ import os
 # Read the backend URL from the environment variable, with a default for local testing.
 BASE_API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
-# Debug: show the backend URL on the app
-# st.write("Using backend URL:", BASE_API_URL)
-
 # Custom CSS for UI enhancements using given HEX colors
 st.markdown(
     """
@@ -39,36 +36,59 @@ st.markdown(
 def upload_pdfs(files):
     upload_url = f"{BASE_API_URL}/upload_pdfs/"
     file_data = [("files", (file.name, file, "application/pdf")) for file in files]
-    response = requests.post(upload_url, files=file_data)
     try:
+        response = requests.post(upload_url, files=file_data)
+        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
         return response.json()
-    except Exception as e:
-        st.error(f"Error parsing JSON: {e}")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error uploading files: {e}")
         return {}
 
 # Function to process PDFs
 def process_pdfs(selected_pdfs, llm_choice):
     process_url = f"{BASE_API_URL}/process_pdfs/"
     data = {"llm_choice": llm_choice, "pdf_files": selected_pdfs}
-    response = requests.post(process_url, data=data)
-    return response.json()
+    try:
+        response = requests.post(process_url, data=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error processing PDFs: {e}")
+        return {"status": "Error processing PDFs"}
 
 # Function to ask a question
 def ask_question(question, llm_choice):
     ask_url = f"{BASE_API_URL}/ask_question/"
     json_data = {"question": question, "llm_choice": llm_choice}
-    response = requests.post(ask_url, json=json_data)
-    return response.json()
+    try:
+        response = requests.post(ask_url, json=json_data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error asking question: {e}")
+        return {"answer": "Error getting response", "chat_history": [], "sources": []}
 
 # Function to compare reports
 def compare_reports(selected_pdfs, llm_choice):
     compare_url = f"{BASE_API_URL}/compare_reports/"
     data = {"llm_choice": llm_choice, "pdf_files": selected_pdfs}
-    response = requests.post(compare_url, data=data)
-    return response.json()
+    try:
+        response = requests.post(compare_url, data=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error comparing reports: {e}")
+        return {"error": "Error comparing reports"}
+
+# Add session state to keep track of uploaded files
+if 'uploaded_file_names' not in st.session_state:
+    st.session_state.uploaded_file_names = []
 
 # Streamlit UI
 st.markdown("<h1>RAG-Power Survey Analysis</h1>", unsafe_allow_html=True)
+
+# Add information about the deployed app
+st.markdown("This application uses Retrieval-Augmented Generation (RAG) to analyze and compare market research reports.")
 
 # PDF Upload section
 st.markdown("<h2>Upload PDFs</h2>", unsafe_allow_html=True)
@@ -78,11 +98,14 @@ if uploaded_files:
     if st.button("Upload PDFs"):
         with st.spinner("Uploading PDFs..."):
             upload_response = upload_pdfs(uploaded_files)
-        st.success(f"Uploaded PDFs: {upload_response.get('Uploaded PDFs')}")
+            if "Uploaded PDFs" in upload_response:
+                # Update our session state with the new file names
+                st.session_state.uploaded_file_names = [f.name for f in uploaded_files]
+                st.success(f"Uploaded PDFs successfully!")
 
 # LLM Selection and Process PDFs section
 st.markdown("<h2>Process PDFs</h2>", unsafe_allow_html=True)
-saved_pdfs = st.multiselect("Select previously uploaded PDFs", [file.name for file in uploaded_files])
+saved_pdfs = st.multiselect("Select previously uploaded PDFs", st.session_state.uploaded_file_names)
 llm_choice = st.selectbox("Select LLM", ["Mixtral", "Phi", "Llama 3.1"])
 
 if st.button("Process PDFs"):
@@ -122,7 +145,7 @@ if st.button("Ask Question"):
 
 # New section: Compare Reports
 st.markdown("<h2>Compare Reports</h2>", unsafe_allow_html=True)
-compare_pdfs = st.multiselect("Select exactly 2 PDFs to compare", [file.name for file in uploaded_files])
+compare_pdfs = st.multiselect("Select exactly 2 PDFs to compare", st.session_state.uploaded_file_names, key="compare_select")
 llm_choice_compare = st.selectbox("Select LLM for Comparison", ["Mixtral", "Phi", "Llama 3.1"], key="compare")
 
 if st.button("Compare Reports"):
@@ -141,3 +164,6 @@ if st.button("Compare Reports"):
                 st.write(summary)
     else:
         st.error("Please select exactly 2 PDFs and an LLM to compare")
+
+# Display connection info in footer
+st.markdown(f"<hr><small>Connected to backend at: {BASE_API_URL}</small>", unsafe_allow_html=True)

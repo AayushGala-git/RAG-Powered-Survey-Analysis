@@ -23,10 +23,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Directory to store uploaded PDFs
-PDF_DIR = "uploaded_pdfs"
+# Directory to store uploaded PDFs - use /tmp for Render's ephemeral storage
+PDF_DIR = "/tmp/uploaded_pdfs"
 if not os.path.exists(PDF_DIR):
     os.makedirs(PDF_DIR)
+
+# Keep track of uploaded files in memory since filesystem is ephemeral on Render
+uploaded_files_registry = {}
 
 # Custom prompt template
 custom_template = (
@@ -70,12 +73,24 @@ async def upload_pdfs(files: List[UploadFile] = File(...)):
         file_path = os.path.join(PDF_DIR, file.filename)
         with open(file_path, "wb") as f:
             f.write(await file.read())
+        # Register the file in our in-memory registry
+        uploaded_files_registry[file.filename] = file_path
         saved_files.append(file_path)
-    return {"Uploaded PDFs": saved_files}
+    return {"Uploaded PDFs": [os.path.basename(f) for f in saved_files]}
 
 @app.post("/process_pdfs/")
 async def process_pdfs(llm_choice: str = Form(...), pdf_files: List[str] = Form(...)):
-    all_selected_files = [os.path.join(PDF_DIR, pdf) for pdf in pdf_files]
+    # Retrieve full paths from our registry
+    all_selected_files = [uploaded_files_registry.get(pdf, os.path.join(PDF_DIR, pdf)) for pdf in pdf_files]
+    
+    # Check if files exist
+    for file_path in all_selected_files:
+        if not os.path.exists(file_path):
+            return JSONResponse(
+                status_code=404, 
+                content={"error": f"File not found: {os.path.basename(file_path)}. Please upload it again."}
+            )
+    
     raw_text = get_pdf_text(all_selected_files)
     text_chunks = get_chunks(raw_text)
     vectorstore = get_vectorstore(text_chunks)
@@ -93,7 +108,8 @@ async def ask_question(question_input: QuestionInput):
     sources = []
     for doc in source_docs:
         page = doc.metadata.get("page", "Unknown")
-        file_name = doc.metadata.get("source", "Unknown")
+        file_path = doc.metadata.get("source", "Unknown")
+        file_name = os.path.basename(file_path)
         snippet = doc.page_content[:200]
         sources.append({
             "page": page,
@@ -112,10 +128,21 @@ async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Fo
     if len(pdf_files) != 2:
         return JSONResponse(status_code=400, content={"error": "Please select exactly 2 PDFs for comparison."})
 
+    # Retrieve full paths from our registry
+    file_paths = [uploaded_files_registry.get(pdf, os.path.join(PDF_DIR, pdf)) for pdf in pdf_files]
+    
+    # Check if files exist
+    for file_path in file_paths:
+        if not os.path.exists(file_path):
+            return JSONResponse(
+                status_code=404, 
+                content={"error": f"File not found: {os.path.basename(file_path)}. Please upload it again."}
+            )
+
     summaries = {}
     llm = get_llm(llm_choice)
-    for pdf in pdf_files:
-        file_path = os.path.join(PDF_DIR, pdf)
+    for i, pdf in enumerate(pdf_files):
+        file_path = file_paths[i]
         raw_text = get_pdf_text([file_path])
         text_chunks = get_chunks(raw_text)
         combined_text = " ".join([chunk.page_content for chunk in text_chunks])
@@ -130,3 +157,8 @@ async def compare_reports(llm_choice: str = Form(...), pdf_files: List[str] = Fo
     comparison = llm(compare_prompt)
 
     return {"comparison": comparison, "summaries": summaries}
+
+# Health check endpoint for Render
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}

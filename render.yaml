@@ -1,0 +1,24 @@
+services:
+  # Backend service
+  - type: web
+    name: rag-survey-analysis-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: HUGGINGFACEHUB_API_TOKEN
+        sync: false
+      - key: PORT
+        value: 10000
+
+  # Frontend service
+  - type: web
+    name: rag-survey-analysis-frontend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run frontend/client.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: BACKEND_URL
+        value: https://rag-survey-analysis-backend.onrender.com
+      - key: PORT
+        value: 10001
