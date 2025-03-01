@@ -196,6 +196,3 @@ if st.button("Compare Reports"):
                         st.write(summary)
     else:
         st.error("Please select exactly 2 PDFs and an LLM to compare")
-
-# Display connection info in footer
-st.markdown(f"<hr><small>Connected to backend at: {BASE_API_URL} | Backend status: {'✅ Connected' if backend_available else '❌ Disconnected'}</small>", unsafe_allow_html=True)
