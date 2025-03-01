@@ -17,5 +17,5 @@ services:
     buildCommand: pip install -r requirements_frontend.txt
     startCommand: streamlit run frontend/client.py --server.port $PORT --server.address 0.0.0.0
     envVars:
-      - key: BACKEND_URL
-        value: https://rag-survey-analysis-backend.onrender.com
+  - key: BACKEND_URL
+    value: https://rag-survey-analysis-backend.onrender.com
