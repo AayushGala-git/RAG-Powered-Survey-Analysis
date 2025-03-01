@@ -31,19 +31,25 @@ RAG-Power Survey Analysis is an application that leverages Retrieval-Augmented G
 
 ## Project Structure
 ```plaintext
-├── api.py                  # FastAPI backend application  
-├── client.py               # Streamlit frontend application  
-├── Vectorstore.py          # PDF text extraction, chunking, and FAISS vectorstore creation  
-├── Llama3.py               # HuggingFace endpoint for Llama 3.1 (API key managed via environment variable)  
-├── Mixtral.py              # HuggingFace endpoint for Mixtral model (API key managed via environment variable)  
-├── Phi.py                  # HuggingFace endpoint for Phi model (API key managed via environment variable)  
-├── Dockerfile.backend      # Dockerfile for backend deployment  
-├── Dockerfile.client       # Dockerfile for frontend deployment  
-├── docker-compose.yml      # Docker Compose configuration for multi-container deployment  
-├── requirements.txt        # Python dependencies for the backend  
-├── requirements_client.txt # Python dependencies for the frontend  
-├── .env                    # Environment variables file (not committed)  
-└── README.md               # This file  
+RAG-Powered-Survey-Analysis/
+├── backend/
+│   ├── __pycache__/
+│   ├── Llama3.py
+│   ├── Mixtral.py
+│   ├── Ph.py
+│   ├── Vectorstore.py
+│   └── client.py
+├── uploaded_pdfs/
+│   ├── 2023-conocophillips-aim-presentation.pdf  
+│   └── 2024-conocophillips-proxy-statement.pdf  
+├── .env
+├── .gitignore
+├── Procfile.front
+├── Procfile.web
+├── ReadMe.md
+├── render.yaml
+├── requirements_frontend.txt
+└── requirements.txt 
 ```
 
 ## Setup and Installation
@@ -86,6 +92,19 @@ RAG-Power Survey Analysis is an application that leverages Retrieval-Augmented G
 
 - **Compare Reports:**  
   Select two PDFs to compare, and the system will generate individual summaries and a combined comparison highlighting similarities and differences.
+
+## Deployment
+
+The project is deployed using Render.
+- **Live Application:** [https://rag-survey-analysis-frontend.onrender.com/](https://rag-survey-analysis-frontend.onrender.com/)
+- The Render deployment automates builds from the GitHub repository and serves both the backend and the frontend, ensuring a seamless full-stack experience.
+
+## Additional Information
+
+- **Error Handling & Loading States:**  
+  The application includes error handling and loading indicators to improve user experience.
+- **Testing & Best Practices:**  
+  Code is structured for readability and maintainability, with unit and integration tests for core functionalities (if applicable).
 
   ## Troubleshooting
 
